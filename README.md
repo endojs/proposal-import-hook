@@ -66,13 +66,10 @@ After the module has executed, the implementation consults the `importHook` for
 each dynamic `import` called from the emitted module instance.
 The import hook receives an import attributes object regardless of whether
 the import statement or expression expressed any import attributes.
-
-> For consideration: for a dynamic import, we may or may not pass the given
-> import attributes object through to import hooks, and we may or may not
-> assert or otherwise adjust the key order to be canonicalized.
-> The canonical order is important for the implementation to form a
-> deterministic cache key from arbitrary attributes but an import hook should
-> not be sensitive to that order.
+The import attributes must be presented with keys in shortlex order,
+and consequently, for the case that dynamic import provides a JavaScript
+object for the import attributes bag, the implementation creates a
+normalized copy for the second positional argument to the `importHook`.
 
 ```ts
 type ImportHook = (
@@ -115,8 +112,60 @@ We rely on the existing import mechanism: a dynamic `import` on a
 instance for that source and drive that through execution and return a promise
 for the corresponding module namespace.
 In that process, the implementation will call `importHook` for each module
-imported statically and dynamically in that module, giving it the module
-specifier string an canonicalized import attributes.
+imported statically and dynamically in that module, giving it the import
+specifier string and import attributes.
+For example, importing a module that statically imports a module `x`,
+
+```js
+import 'x';
+```
+
+If the module map has no entry indicating that this module source has never
+before imported `"x"`, will induce the implementation to call the module
+source's import hook, albeit the user code import hook, with the module
+specifier `"x"` and an empty import attributes object, expecting it to produce
+a promise for the `ModuleSource` of `"x"`.
+
+```js
+const source = await importHook('x', {});
+```
+
+Thereafter, the implementation will never again consult the `importHook`
+for the modules specifier `"x"` with no import attributes.
+
+For another example, importing a module that imports a module `"y"` with
+import attributes `type: 'json'` and `extraneous: "very"` will induce
+the `importHook` for the identified `ModuleSource` once.
+
+```js
+import 'y' with { type: 'json', extraneous: 'very' };
+```
+
+The syntax of dynamic import does not itself reify a JavaScript object
+for the import attributes.
+But, for the purposes of calling an `importHook`, the implementation
+must produce a _canonicalized_ object with the keys of the import
+attributes in shortlex order.
+
+```js
+const source = await importHook('y', { extraneous: 'very', type: 'json' });
+```
+
+The implementation also consults the `importHook` for:
+
+- dynamic `import` with or without attributes,
+- static `import source`, with or without attributes, and
+- dynamic `import.source`, with or without attributes.
+
+Dynamic import receives a reified attributes bag.
+To provide consistent behavior, the implementation produces
+a canonicalized copy of the given attributes bag for the `importHook`.
+
+```js
+await import('z', { type: 'json', extraneous: 'very' });
+// ->
+wait importHook('z', { extraneous: 'very', type: 'json' });
+```
 
 # Examples
 
