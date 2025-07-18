@@ -34,7 +34,7 @@ We extend the `ModuleSource` constructor to accept an optional handler.
 
 ```ts
 interface ModuleSource {
-  constructor(source: string, handler?: ModuleHandler);
+  constructor(source: string | ModuleSource, handler?: ModuleHandler);
 }
 ```
 
@@ -44,9 +44,15 @@ The implementation will thereafter pass the handler as the receiver
 object to any invocation of the `importHook` and `importMetaHook`, so the hooks
 may consult other properties of the handler.
 
-> The handler is necessary for capturing a base specifier for resolving a
-> relative import specifier, and allows 262 to avoid unnecssary specificity
+> Aside, the handler is necessary for capturing a base specifier for resolving
+> a relative import specifier, and allows 262 to avoid unnecssary specificity
 > about resolution algorithms.
+
+Because the identity of a `ModuleSource` is a key in a realm's module map for
+purposes of denoting a corresponding module instance, we introduce the ability
+to construct a `ModuleSource` from the precompiled text and host data of
+another module source, but producing a distinct identity for purposes of
+multiple instantiation.
 
 ```ts
 type ModuleHandler = {
@@ -163,36 +169,123 @@ a canonicalized copy of the given attributes bag for the `importHook`.
 
 ```js
 await import('z', { type: 'json', extraneous: 'very' });
-// ->
-wait importHook('z', { extraneous: 'very', type: 'json' });
 ```
 
-# Examples
-
-### Import Kicker
-
-Any dynamic import function is suitable for initializing, linking, and
-evaluating a module instance from a module source.
-This necessarily implies advancing all of its transitive dependencies to their
-terminal state or any one into a failed state.
+So the implementation then calls the `importHook` with the canonicalized import
+attributes.
 
 ```js
-const source = new ModuleSource(``);
-const namespace = await import(source);
+await importHook('z', { extraneous: 'very', type: 'json' });
 ```
 
-### ModuleSource Idempotence
+## Examples
 
-Since an execution environment associates a `ModuleSource` object with an
-internal module record, importing the same module source in the same execution
-context will produce a fresh promise for the same module exports namespace
-exotic object as all previous imports.
+## Mocking
+
+With an `importHook`, a test can isolate a specific module and mock one or more
+of its dependencies.
+In this example, we import a test fixture module and execute it in an
+environment where its `fs` dependency is met by `mock-fs` and all other
+imports fall through to the host.
 
 ```js
-const source = new ModuleSource(``);
-const namespace1 = await import(source);
-const namespace2 = await import(source);
-namespace1 === namespace2; // true
+import source fixture from 'fixture.js';
+
+await import(new ModuleSource(fixture, {
+  importHook(specifier, attributes) {
+    if (specifier === 'fs') {
+      return import.source('mock-fs');
+    } else {
+      return import.source(specifier, attributes);
+    }
+  }
+}));
+```
+
+## Mocking Membrane
+
+With a slight complication, the fixture can be imported in an environment where
+its transitive dependencies experience the same distortion of `fs` to
+`mock-fs`.
+
+```js
+import source fixture from 'fixture.js';
+
+const handler = {
+  importHook(specifier, attributes) {
+    if (specifier === 'fs') {
+      return import.source('mock-fs');
+    } else {
+      const source = await import.source(specifier, attributes);
+      return new ModuleSource(source, handler);
+    }
+  },
+}
+
+await import(new ModuleSource(fixture, handler));
+```
+
+This example is admittedly reductive for illustration purposes.
+The `importHook` is also responsible for resolving module-relative and
+package-relative URLs.
+
+## Module system extension
+
+In this example, we create a module source that transitively traps all imports
+and loads source for them with `fetch` and treats all import specifiers as
+URLs, resolving relative URLs to the location of the containing module source,
+and provides `import.meta.url`.
+
+```js
+const handlerPrototype = {
+  async importHook(importSpecifier) {
+    const url = new URL(importSpecifier, this.url).href;
+    const response = await fetch(url);
+    const text = await response.text();
+    return new ModuleSource(text, {
+      __proto__: handlerPrototype,
+      url,
+    });
+  },
+  importMetaHook(meta) {
+    meta.url = this.url;
+  },
+};
+const source = new ModuleSource(`
+  import 'example.js';
+`, { __proto__, url: import.meta.url });
+await import(source);
+```
+
+With a slight complication, the hook can accommodate the `type` `json` import
+attribute, or arbitrary types and arbitrary other import attributes.
+
+```js
+const handlerPrototype = {
+  async importHook(importSpecifier, { type }) {
+    const url = new URL(importSpecifier, this.url).href;
+    const response = await fetch(url);
+    if (type === 'json') {
+      const json = await response.text();
+      // Virtual module sources (to be proposed) would obviate the need to
+      // embed the JSON in a JS module source.
+      return new ModuleSource(`export default ${json}`);
+    } else if (type === undefined) {
+      const text = await response.text();
+      return new ModuleSource(text, {
+        __proto__: handlerPrototype,
+        url,
+      });
+    }
+  },
+  importMetaHook(meta) {
+    meta.url = this.url;
+  },
+};
+const source = new ModuleSource(`
+  import 'example.js';
+`, { __proto__, url: import.meta.url });
+await import(source);
 ```
 
 # Intersection Semantics
