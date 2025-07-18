@@ -297,7 +297,7 @@ to execute without an `unsafe-eval` Content Security Policy.
 We expect a future proposal to introduce `import.now` or `import.sync` as a
 mechanism for synchronously growing the module graph and executing a module.
 If so, `ModuleSource` handlers would need a corresponding synchronous import
-hook that may not return a promise.
+hook that must not return a promise.
 
 # Design Rationales
 
@@ -310,14 +310,14 @@ source at hand to create the corresponding `Module` to be returned. If
 
 Since the `importHook` is only triggered via the kicker (`import(instance)`),
 going async there has no implications whatsoever.
-In prior iterations of this, the user was responsible for loop thru the
-dependencies, and prepare the instance before kicking the next phase, that's
-not longer the case here, where the level of control on the different phases is
-limited to the invocation of the `importHook`.
+In prior iterations of this, the user was responsible for looping thru the
+dependencies, and preparing the instance before kicking the next phase.
+That's no longer the case here, where the level of control on the different
+phases is limited to the invocation of the `importHook`.
 
 ### Can cycles be represented?
 
-Yes, `importHook` can return a `Module` that was either `import()` already or
+Yes, `importHook` can return a `Module` that was either `import()`ed already or
 was returned by an `importHook` already.
 
 The `import.source` behavior introduced in [ESM source phase
