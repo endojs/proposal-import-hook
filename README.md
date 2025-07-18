@@ -25,10 +25,8 @@ an import is satisfied by the host module system, replaced by a mock, or denied
 outright.
 
 > This proposal picks up the remaining pieces of the previous proposal for
-> [First-class `Module` and `Module Source`]
-> (https://github.com/tc39/proposal-compartments/blob/7e60fdbce66ef2d97370007afeb807192c653333/0-module-and-module-source.md)
-> from the [HardenedJS](https://hardenedjs.org) [`Compartment`
-> proposal][proposal-compartment].
+> [First-class `Module` and `Module Source`](https://github.com/tc39/proposal-compartments/blob/7e60fdbce66ef2d97370007afeb807192c653333/0-module-and-module-source.md)
+> from the [HardenedJS](https://hardenedjs.org) [`Compartment` proposal][proposal-compartment].
 
 # Proposal
 
