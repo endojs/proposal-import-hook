@@ -438,8 +438,6 @@ module specifier, as state of the handler accessible like `this.url`.
 The handler also allows 262 to evolve without concerning itself with
 implementation- or host-specific module resolution algorithms.
 
-## Design Variables
-
 [proposal-source-phase-imports]: https://github.com/tc39/proposal-source-phase-imports
 [proposal-esm-phase-imports]: https://github.com/tc39/proposal-esm-phase-imports
 [proposal-compartments]: https://github.com/tc39/proposal-compartments
